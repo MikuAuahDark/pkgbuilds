@@ -1,0 +1,62 @@
+# Maintainer: Bart van Strien <bart.bes@gmail.com>
+# Contributor: Linus Sjögren <thelinx@unreliablepollution.net>
+# Contributor: Andrzej Giniewicz <gginiu@gmail.com>
+
+pkgname=love12-git
+pkgver=20220416.321397d1
+pkgrel=1
+pkgdesc="An open-source 2D game engine which uses the versatile Lua scripting language to create dynamic gaming experiences."
+arch=('amd64' 'arm64' 'i386')
+url="https://love2d.org/"
+license=('ZLIB')
+depends=(
+	'libluajit-5.1-dev>=2.1.0~beta3'
+	'libfreetype6-dev'
+	'libopenal-dev'
+	'libvorbis-dev'
+	'libmodplug-dev'
+	'libsdl2-dev>=2.0.20'
+	'zlib1g-dev'
+	'libtheora-dev'
+)
+makedepends=('autotools-dev' 'git')
+options=(!strip)
+source=('git+https://github.com/love2d/love#branch=12.0-development')
+sha256sums=('SKIP')
+
+pkgver() {
+	cd $srcdir/love
+	git log -1 --format='%cd.%h' --date=format:'%Y%m%d'
+}
+
+build() {
+	cd $srcdir/love
+
+	# Update version information in configure script
+	msg "Updating version information"
+	head -c 15 platform/unix/configure.ac > configure.ac.tmp
+	echo " [$pkgver])" >> configure.ac.tmp
+	tail -n +2 platform/unix/configure.ac >> configure.ac.tmp
+	mv configure.ac.tmp platform/unix/configure.ac
+
+	# Skip installing desktop files, icons, etc
+	head -n 4 platform/unix/Makefile.am > Makefile.am.tmp
+	mv Makefile.am.tmp platform/unix/Makefile.am
+
+	# Generate a configure script for love-git (note the suffix), then configure
+	msg "Generating makefiles"
+	bash platform/unix/automagic 12-git
+	./configure --enable-silent-rules --disable-shared --enable-static --prefix=/usr LDFLAGS=""
+
+	# Finally build
+	msg "Building"
+	make -j$(nproc --ignore 2)
+}
+
+package() {
+	cd "$srcdir/love"
+	make DESTDIR="$pkgdir" install
+
+	# Install the license file
+	install -D -m644 license.txt "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}
